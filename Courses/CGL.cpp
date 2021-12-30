@@ -60,6 +60,8 @@ struct Point
 
 typedef Point Vector;
 
+typedef vector<Point> Polygon;
+
 double clamp(double x, double min, double max) 
 {
     if (x < min) return min;
@@ -309,9 +311,221 @@ void closest(Segment seg1, Segment seg2, double eps,
     }
 }
 
-#define CGL_2_D
-//------------------------------------------------------------------
+bool is_convex(const Polygon& poly, double eps)
+{
+    int n = (int)poly.size();
+    for (int i = 0; i < n; i++) {
+        int prev = (i + n -1) % n;
+        int next = (i + 1) % n;
+        if (ccw(poly[prev], poly[i], poly[next], eps) < 0) {
+            return false;
+        }
+    }
+    return true;
+}
 
+void aabb(const Polygon& poly, Point* m, Point* M)
+{
+    double mx = HUGE_VAL, my = HUGE_VAL;
+    double Mx = -HUGE_VAL, My = -HUGE_VAL;
+
+    for (const auto& v : poly) {
+        mx = min(mx, v.x);
+        my = min(my, v.y);
+        Mx = max(Mx, v.x);
+        My = max(My, v.y);
+    }
+    *m = Point(mx, my);
+    *M = Point(My, My);
+}
+
+static double get_widest_angle_diff( const vector<double>& v)
+{
+    double ans = 0;
+    double w_max = 0;
+    int n = (int)v.size();
+    for (int i = 0; i < n-1; i++) {
+        double w = v[i+1] - v[i];
+        if (w > w_max) {
+            ans = 0.5 * (v[i+1] + v[i]);
+            w_max = w;
+        }
+    }
+    return ans;
+}
+
+// 2:inside,  1:on-edge, 0:outside
+int contain(const Polygon& poly, Point p, double eps)
+{
+    int n = (int)poly.size();
+
+    Point m, M;
+    aabb(poly, &m, &M);
+    double diag = (M - m).len();
+
+    for (int i = 0; i < n; i++) {
+        int next = (i + 1) % n;
+        double t, dist;
+        Point h = project(Segment(poly[i], poly[next]), p, &t, &dist);
+        if (dist < eps) {
+            return 1;
+        }
+    }
+
+    vector<double> arg; // angle
+    for (const auto& q : poly) {
+        Vector v = q - p;
+        double a = atan2(v.y, v.x);
+        arg.push_back(a);
+    }
+    sort(arg.begin(), arg.end());
+
+    double La = get_widest_angle_diff(arg);
+    Vector vv(cos(La), sin(La));
+    Point q = p + vv * diag;
+    Segment ray(p, q);
+
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        int next = (i + 1) % n;
+        Segment e(poly[i], poly[next]);
+
+        if (intersect(ray, e, eps)) {
+            count++;
+        }
+    }
+
+    if (count % 2 == 0) {
+        return 0;
+    } else {
+        return 2;
+    }
+}
+
+#define CGL_4_A
+//------------------------------------------------------------------
+int main()
+{
+    int n;
+    cin >> n;
+
+    cout << fixed << setprecision(1);
+    const double eps = 1e-10;
+
+    Polygon poly;
+    for (int i = 0; i < n; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        poly.push_back(p);
+    }
+
+    int q;
+    cin >> q;
+
+    for (int i = 0; i < q; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        cout << contain(poly, p, eps) << endl;
+    }
+
+    return 0;
+}
+
+#ifdef CGL_3_C
+int main()
+{
+    int n;
+    cin >> n;
+
+    cout << fixed << setprecision(1);
+    const double eps = 1e-10;
+
+    Polygon poly;
+    for (int i = 0; i < n; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        poly.push_back(p);
+    }
+
+    int q;
+    cin >> q;
+
+    for (int i = 0; i < q; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        cout << contain(poly, p, eps) << endl;
+    }
+
+    return 0;
+}
+#endif
+
+#ifdef CGL_3_B
+int main()
+{
+    int n;
+    cin >> n;
+
+    cout << fixed << setprecision(1);
+    const double eps = 1e-10;
+
+    Polygon poly;
+    for (int i = 0; i < n; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        poly.push_back(p);
+    }
+
+    for (int i = 0; i < n; i++) {
+        int prev = (i + n -1) % n;
+        int next = (i + 1) % n;
+        if (ccw(poly[prev], poly[i], poly[next], eps) < 0) {
+            cout << 0 << endl;
+            return 0;
+        }
+    }
+
+    cout << 1 << endl;
+
+    return 0;
+}
+#endif
+
+#ifdef CGL_3_A
+int main()
+{
+    int n;
+    cin >> n;
+
+    cout << fixed << setprecision(1);
+    const double eps = 1e-10;
+
+    Polygon poly;
+
+    for (int i = 0; i < n; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        poly.push_back(p);
+    }
+
+    double s = 0;
+    for (int i = 1; i < n-1; i++) {
+        s += 0.5 * signedArea(poly[0], poly[i], poly[i+1]);
+    }
+
+    cout << s << endl;
+
+    return 0;
+}
+#endif
+
+#ifdef CGL_2_D
 int main()
 {
     int q;
@@ -337,7 +551,7 @@ int main()
 
     return 0;
 }
-
+#endif
 
 #ifdef CGL_2_C
 
