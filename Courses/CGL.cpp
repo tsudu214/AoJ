@@ -58,9 +58,17 @@ struct Point
     double y;
 };
 
+bool compare_x(const Point &a, const Point &b) {
+    return a.x == b.x? a.y < b.y : a.x < b.x;
+}
+
+bool compare_y(const Point &a, const Point &b) {
+    return a.y == b.y? a.x < b.x : a.y < b.y;
+}
+
 typedef Point Vector;
 
-typedef vector<Point> Polygon;
+using Polygon = vector<Point>;
 
 double clamp(double x, double min, double max) 
 {
@@ -402,6 +410,47 @@ int contain(const Polygon& poly, Point p, double eps)
     }
 }
 
+Polygon convex_hull(const Polygon& poly, double eps)
+{
+    vector<Point> s = poly;
+    sort(s.begin(), s.end(), compare_x);
+
+    int n = (int)s.size();
+    if (n < 3) return s;
+
+    vector<Point> u, l;
+    u.reserve(n);
+    l.reserve(n);
+    u.push_back(s[0]);
+    u.push_back(s[1]);
+    for (int i = 2; i < n; i++) {
+        for (int j = (int)u.size()-1; j >= 1; j--) {
+            if (ccw(u[j-1], u[j], s[i], eps) == 1) {
+                u.pop_back();
+            }
+        }
+        u.push_back(s[i]);
+    }
+
+    l.push_back(s[n-1]);
+    l.push_back(s[n-2]);
+    for (int i = n-3; i >= 0; i--) {
+        for (int j = (int)l.size()-1; j >= 1; j--) {
+            if (ccw(l[j-1], l[j], s[i], eps) == 1) {
+                l.pop_back();
+            }
+        }
+        l.push_back(s[i]);
+    }
+
+    reverse(l.begin(), l.end());
+    for (int i = (int)u.size()-2; i >= 1; i--) {
+        l.push_back(u[i]);
+    }
+
+    return l;
+}
+
 #define CGL_4_A
 //------------------------------------------------------------------
 int main()
@@ -409,7 +458,7 @@ int main()
     int n;
     cin >> n;
 
-    cout << fixed << setprecision(1);
+    cout << fixed << setprecision(0);
     const double eps = 1e-10;
 
     Polygon poly;
@@ -420,14 +469,19 @@ int main()
         poly.push_back(p);
     }
 
-    int q;
-    cin >> q;
+    Polygon hull = convex_hull(poly, eps);
 
-    for (int i = 0; i < q; i++) {
-        double x, y;
-        cin >> x >> y;
-        Point p(x, y);
-        cout << contain(poly, p, eps) << endl;
+    int m = (int)hull.size();
+    int idx = 0;
+    for (int i = 1; i < m; i++) {
+        if (compare_y(hull[i], hull[idx])) {
+            idx = i;
+        }
+    }
+
+    cout << m << endl;
+    for (int i = 0; i < m; i++) {
+        cout << hull[(idx + i)%m].x << " " << hull[(idx + i)%m].y << endl;
     }
 
     return 0;
