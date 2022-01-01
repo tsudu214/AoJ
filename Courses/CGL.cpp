@@ -121,6 +121,7 @@ double cross(const Vector& p, const Vector& q) {
 
 struct Line 
 {
+    Line() = default;
     Line(const Point& p0, const Vector& v0) : p(p0), v(v0) {}
     Point p;
     Vector v;  // should be normalized
@@ -128,6 +129,7 @@ struct Line
 
 struct Segment 
 {
+    Segment() = default;
     Segment(const Point& a0, const Point& b0): a(a0), b(b0) {}
     Point a;
     Point b;
@@ -630,8 +632,99 @@ double closest_pair(vector<Point>& P)
     return closest_pair(P.begin(), (int)P.size());
 }
 
-#define CGL_5_A
+enum EP_TYPE { EP_DOWN = 0, EP_LEFT = 1, EP_RIGHT = 2, EP_UP = 3 };
+
+struct EndPoint 
+{
+    int id;
+    Point p;
+    EP_TYPE type;
+
+    bool operator<(const EndPoint& other) {
+        return p.y < other.p.y || p.y == other.p.y && type < other.type;
+    }
+};
+
+void align_endpoints(Segment& s, int i, EndPoint* ep1, EndPoint* ep2)
+{
+    Point& p1 = s.a;
+    Point& p2 = s.b;
+    if (p1.x == p2.x) {
+        if (p1.y > p2.y) {
+            swap(p1, p2);
+        }
+        *ep1 = { i, p1, EP_TYPE::EP_DOWN };
+        *ep2 = { i, p2, EP_TYPE::EP_UP };
+    }
+    else {
+        if (p1.x > p2.x) {
+            swap(p1, p2);
+        }
+        *ep1 = { i, p1, EP_TYPE::EP_LEFT };
+        *ep2 = { i, p2, EP_TYPE::EP_RIGHT };
+    }
+}
+
+int manhattan_intersect(vector<Segment>& L)
+{
+    int n = (int)L.size();
+    vector<EndPoint> EP(2*n);
+    for (int i = 0; i < n; i++) {
+        EndPoint ep[2];
+        align_endpoints(L[i], i, &ep[0], &ep[1]);
+        for (int k = 0; k < 2; k++) {
+            EP[2*i + k] = ep[k];
+        }
+    }
+    sort(EP.begin(), EP.end());
+
+    int cnt = 0;
+    set<double> X; 
+    for (int i = 0; i < 2*n; i++) {
+        EndPoint& curr = EP[i];
+        if (curr.type == EP_TYPE::EP_DOWN)
+        {
+            X.insert(curr.p.x);
+        }
+        if (curr.type == EP_TYPE::EP_LEFT)
+        {
+            auto b = lower_bound(X.begin(), X.end(), L[curr.id].a.x);
+            auto e = upper_bound(X.begin(), X.end(), L[curr.id].b.x);
+            cnt += (int)distance(b, e);
+        }
+        if (curr.type == EP_TYPE::EP_UP)
+        {
+            X.erase(curr.p.x);
+        }
+    }
+
+    return cnt;
+}
+
+#define CGL_6_A
 //------------------------------------------------------------------
+
+int main()
+{
+    const double eps = 1e-10;
+    cout << fixed << setprecision(10);
+
+    int n;
+    cin >> n;
+    vector<Segment> L(n);
+    for (int i = 0; i < n; i++) {
+        double x1, y1, x2, y2;
+        cin >> x1 >> y1 >> x2 >> y2;
+        L[i] = Segment(Point(x1, y1), Point(x2, y2));
+    }
+
+    cout << manhattan_intersect(L) << endl;
+
+    return 0;
+}
+
+
+#ifdef CGL_5_A
 int main()
 {
     const double eps = 1e-10;
@@ -650,6 +743,7 @@ int main()
 
     return 0;
 }
+#endif
 
 #ifdef CGL_4_C
 int main()
