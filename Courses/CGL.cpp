@@ -701,9 +701,107 @@ int manhattan_intersect(vector<Segment>& L)
     return cnt;
 }
 
-#define CGL_6_A
-//------------------------------------------------------------------
+struct Circle
+{
+    Circle() = default;
+    Circle(const Point& c0, double r0) : c(c0), r(r0) {}
+    Point  c;
+    double r;
+};
 
+// 0: included, 1: inscribed, 2: intersecting, 3: circumscribed, 4: separated
+int intersect_cc_type(const Circle& c1, const Circle& c2, double eps)
+{
+    double d = (c1.c - c2.c).len();
+    double r = min(c1.r, c2.r), R = max(c1.r, c2.r);
+    if (d < R - r - eps) return 0;
+    else if (d < R - r + eps) return 1;
+    else if (d < R + r - eps) return 2;
+    else if (d < R + r + eps) return 3;
+    else return 4;
+}
+
+Line bisect(const Point& a, const Point& b, const Point& c)
+{
+    Line Lab(a, (b - a).norm());
+    Line Lac(a, (c - a).norm());
+    Vector vm = (Lab.v + Lac.v).norm();
+    return Line(a, vm);
+}
+
+double angle(const Point& a, const Point& b, const Point& c)
+{
+    return acos(dot(b - a, c - a));
+}
+
+Circle incircle(const Point& a, const Point& b, const Point& c, double eps)
+{
+    vector<double> angles { angle(a, b, c), angle(b, c, a), angle(c, a, b) };
+    int min = distance(angles.begin(), min_element(angles.begin(), angles.end()));
+
+    Line L1, L2;
+    if (min == 0) {
+        L1 = bisect(b, c, a);
+        L2 = bisect(c, a, b);
+    } else if (min == 1) {
+        L1 = bisect(a, b, c);
+        L2 = bisect(c, a, b);
+    } else {
+        L1 = bisect(a, b, c);
+        L2 = bisect(b, c, a);
+    }
+
+    Point o;
+    if (!intersect(L1, L2, eps, 0, 0, &o)) {
+        cerr << "no intersection!" << endl;
+    }
+    double r;
+    Line Lab(a, (b - a).norm());
+    project(Lab, o, 0, &r);
+
+    return Circle(o, r);
+}
+
+#define CGL_7_B
+//------------------------------------------------------------------
+int main()
+{
+    const double eps = 1e-8;
+    cout << fixed << setprecision(8);
+
+    Point Tri[3];
+    for (int i = 0; i < 3; i++) {
+        double x, y;
+        cin >> x >> y;
+        Tri[i] = Point(x, y);
+    }
+
+    Circle inc = incircle(Tri[0], Tri[1], Tri[2], eps);
+
+    cout << inc.c.x << " " << inc.c.y << " " << inc.r << endl;
+
+    return 0;
+}
+
+#ifdef CGL_7_A
+int main()
+{
+    const double eps = 1e-10;
+    cout << fixed << setprecision(10);
+
+    Circle C[2];
+    for (int i = 0; i < 2; i++) {
+        double x, y, r;
+        cin >> x >> y >> r;
+        C[i] = Circle(Point(x, y), r);
+    }
+
+    cout << intersect_cc_type(C[0], C[1], eps) << endl;
+
+    return 0;
+}
+#endif
+#ifdef CGL_6_A
 int main()
 {
     const double eps = 1e-10;
@@ -722,7 +820,7 @@ int main()
 
     return 0;
 }
-
+#endif
 
 #ifdef CGL_5_A
 int main()
