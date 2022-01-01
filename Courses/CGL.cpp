@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <algorithm>
 #include <climits> 
@@ -17,24 +18,55 @@
 #include <numeric>
 #include <unordered_map>
 #include <cassert>
+#include <random>
+#include <chrono>
 
 using namespace std;
+using namespace std::chrono;
 
 using ll = long long;
 const ll INF = LLONG_MAX;
 
 //------------------------------------------------------------------
-// common class
+// [usage example]
+// Clock clock
+// ...
+// cerr << "proc A [" << clock.Duration<microseconds>().count()/1000. << " msec]" << "\n"; 
+class Clock
+{
+public:
+    Clock() {
+        Reset();
+    }
+
+    void Reset() {
+        begin = high_resolution_clock::now();
+    }
+
+    template <typename T>
+    T Duration() {
+        T d = duration_cast<T>(high_resolution_clock::now() - begin);
+        begin = high_resolution_clock::now();
+        return d;
+    }
+
+private:
+    high_resolution_clock::time_point begin;
+};
+
+//------------------------------------------------------------------
+// 2D geometry class
 struct Point 
 {
-    Point(double x0 = 0, double y0 = 0) : x(x0), y(y0) {}
+    Point() = default;
+    Point(double x0, double y0) : x(x0), y(y0) {}
 
-    Point operator+(Point q) const { return Point(x + q.x, y + q.y); }
-    Point operator-(Point q) const { return Point(x - q.x, y - q.y); }
-    Point operator*(double a) const { return Point(a * x, a * y); }
+    Point operator+(const Point& q) const { return {x + q.x, y + q.y}; }
+    Point operator-(const Point& q) const { return {x - q.x, y - q.y}; }
+    Point operator*(double a) const { return {a * x, a * y}; }
 
-    Point& operator+=(Point& q) { x += q.x; y += q.y; return *this; }
-    Point& operator-=(Point& q) { x -= q.x; y -= q.y; return *this; }
+    Point& operator+=(const Point& q) { x += q.x; y += q.y; return *this; }
+    Point& operator-=(const Point& q) { x -= q.x; y -= q.y; return *this; }
     Point& operator*=(double a) { x *= a; y *= a; return *this; }
 
     double sqlen() const {
@@ -51,7 +83,7 @@ struct Point
 
     Point norm() const {
         double a = 1./len();
-        return Point(a*x, a*y);
+        return {a*x, a*y};
     }
 
     double x;
@@ -59,11 +91,11 @@ struct Point
 };
 
 bool compare_x(const Point &a, const Point &b) {
-    return a.x == b.x? a.y < b.y : a.x < b.x;
+    return a.x < b.x || (a.x == b.x && a.y < b.y);
 }
 
 bool compare_y(const Point &a, const Point &b) {
-    return a.y == b.y? a.x < b.x : a.y < b.y;
+    return a.y < b.y || (a.y == b.y && a.x < b.x);
 }
 
 typedef Point Vector;
@@ -77,26 +109,26 @@ double clamp(double x, double min, double max)
     return x;
 }
 
-double dot(Vector p, Vector q) 
+double dot(const Vector& p, const Vector& q) 
 {
     return p.x * q.x + p.y * q.y;
 }
 
 // outer-product of 2D vectors is scalar
-double cross(Vector p, Vector q) {
+double cross(const Vector& p, const Vector& q) {
     return p.x * q.y - p.y * q.x;
 } 
 
 struct Line 
 {
-    Line(Point p0, Vector v0) : p(p0), v(v0) {}
+    Line(const Point& p0, const Vector& v0) : p(p0), v(v0) {}
     Point p;
     Vector v;  // should be normalized
 };
 
 struct Segment 
 {
-    Segment(Point a0, Point b0): a(a0), b(b0) {}
+    Segment(const Point& a0, const Point& b0): a(a0), b(b0) {}
     Point a;
     Point b;
     Line line(double* len = nullptr) const {
@@ -105,17 +137,33 @@ struct Segment
     }
 };
 
-double param(Line l, Point p)
+struct AABB {
+    AABB() : min({HUGE_VAL, HUGE_VAL}), max({-HUGE_VAL, -HUGE_VAL}) {}
+    AABB(const Point& m, const Point& M) : min(m), max(M) {}
+    AABB(const Polygon& poly) : min({HUGE_VAL, HUGE_VAL}), max({-HUGE_VAL, -HUGE_VAL})
+    {
+        for (const auto& v : poly) {
+            min.x = std::min(min.x, v.x);
+            min.y = std::min(min.y, v.y);
+            max.x = std::max(max.x, v.x);
+            max.y = std::max(max.y, v.y);
+        }
+    }
+    Point min;
+    Point max;
+};
+
+double param(const Line& l, const Point& p)
 {
     return dot(p - l.p, l.v);
 }
 
-Point getpoint(Line l, double t) 
+Point getpoint(const Line& l, double t) 
 {
     return l.p + l.v * t;
 }
 
-Point project(Line l, Point p, double* t = nullptr, double* dist = nullptr) 
+Point project(const Line& l, const Point& p, double* t = nullptr, double* dist = nullptr) 
 {
     double th = param(l, p);
     Point h = getpoint(l, th);
@@ -124,18 +172,18 @@ Point project(Line l, Point p, double* t = nullptr, double* dist = nullptr)
     return h;
 }
 
-Point symmetry(Line l, Point p)
+Point symmetry(const Line& l, const Point& p)
 {
     return p + (project(l, p) - p) * 2;
 }
 
-double signedArea(Point p0, Point p1, Point p2)
+double signedArea(const Point& p0, const Point& p1, const Point& p2)
 {
     return cross((p1 - p0), (p2 - p0));
 }
 
 // 1:ccw, -1:cw, 0:on-line
-int ccw(Point p0, Point p1, Point p2, double eps, double* area = nullptr)
+int ccw(const Point& p0, const Point& p1, const Point& p2, double eps, double* area = nullptr)
 {
     double a = signedArea(p0, p1, p2);
     if (area) *area = a;
@@ -147,12 +195,12 @@ int ccw(Point p0, Point p1, Point p2, double eps, double* area = nullptr)
         return 0;
 }
 
-bool intersect(Segment s1, Segment s2, double eps, Point* x = nullptr)
+bool intersect(const Segment& s1, const Segment& s2, double eps, Point* x = nullptr)
 {
-    Point p1 = s1.a;
-    Point p2 = s1.b;
-    Point p3 = s2.a;
-    Point p4 = s2.b;
+    const Point& p1 = s1.a;
+    const Point& p2 = s1.b;
+    const Point& p3 = s2.a;
+    const Point& p4 = s2.b;
 
     double a1, a2, a3, a4;
     int ccw1 = ccw(p1, p2, p3, eps, &a1);
@@ -197,7 +245,7 @@ bool intersect(Segment s1, Segment s2, double eps, Point* x = nullptr)
     }
 }
 
-Point project(Segment s, Point p, double* t = nullptr, double* dist = nullptr) 
+Point project(const Segment& s, const Point& p, double* t = nullptr, double* dist = nullptr) 
 {
     Vector ap = p - s.a;
     Vector ab = s.b - s.a;
@@ -217,7 +265,7 @@ Point project(Segment s, Point p, double* t = nullptr, double* dist = nullptr)
     return project(s.line(), p, t, dist);
 }
 
-bool intersect(Line l1, Line l2, double eps, double* sx = nullptr, double* tx = nullptr, Point* x = nullptr)
+bool intersect(const Line& l1, const Line& l2, double eps, double* sx = nullptr, double* tx = nullptr, Point* x = nullptr)
 {
     double crs_v = cross(l1.v, l2.v);
     if (fabs(crs_v) < eps) { // parallel
@@ -248,7 +296,7 @@ bool intersect(Line l1, Line l2, double eps, double* sx = nullptr, double* tx = 
     return true;
 }
 
-void closest(Segment seg1, Segment seg2, double eps, 
+void closest(const Segment& seg1, const Segment& seg2, double eps, 
     double* dist, 
     pair<double, Point>* sx = nullptr, pair<double, Point>* tx = nullptr)
 {
@@ -332,21 +380,6 @@ bool is_convex(const Polygon& poly, double eps)
     return true;
 }
 
-void aabb(const Polygon& poly, Point* m, Point* M)
-{
-    double mx = HUGE_VAL, my = HUGE_VAL;
-    double Mx = -HUGE_VAL, My = -HUGE_VAL;
-
-    for (const auto& v : poly) {
-        mx = min(mx, v.x);
-        my = min(my, v.y);
-        Mx = max(Mx, v.x);
-        My = max(My, v.y);
-    }
-    *m = Point(mx, my);
-    *M = Point(My, My);
-}
-
 static double get_widest_angle_diff( const vector<double>& v)
 {
     double ans = 0;
@@ -363,14 +396,12 @@ static double get_widest_angle_diff( const vector<double>& v)
 }
 
 // 2:inside,  1:on-edge, 0:outside
-int contain(const Polygon& poly, Point p, double eps)
+int contain(const Polygon& poly, const Point& p, double eps)
 {
+    AABB mmb(poly);
+    double diag = (mmb.max - mmb.min).len();
+
     int n = (int)poly.size();
-
-    Point m, M;
-    aabb(poly, &m, &M);
-    double diag = (M - m).len();
-
     for (int i = 0; i < n; i++) {
         int next = (i + 1) % n;
         double t, dist;
@@ -410,56 +441,228 @@ int contain(const Polygon& poly, Point p, double eps)
     }
 }
 
+double area(const Polygon& poly)
+{
+    int n = (int)poly.size();
+    double s = 0;
+    for (int i = 1; i < n-1; i++) {
+        s += 0.5 * signedArea(poly[0], poly[i], poly[(i+1)%n]);
+    }
+    return s;
+}
+
 Polygon convex_hull(const Polygon& poly, double eps)
 {
     vector<Point> s = poly;
-    sort(s.begin(), s.end(), compare_x);
-
     int n = (int)s.size();
     if (n < 3) return s;
 
-    vector<Point> u, l;
-    u.reserve(n);
-    l.reserve(n);
-    u.push_back(s[0]);
-    u.push_back(s[1]);
+    sort(s.begin(), s.end(), compare_y);
+
+    vector<Point> up, down;
+    up.reserve(n);
+    down.reserve(n);
+    up.push_back(s[0]);
+    up.push_back(s[1]);
     for (int i = 2; i < n; i++) {
-        for (int j = (int)u.size()-1; j >= 1; j--) {
-            if (ccw(u[j-1], u[j], s[i], eps) == 1) {
-                u.pop_back();
+        for (int j = (int)up.size()-1; j >= 1; j--) {
+            if (ccw(up[j-1], up[j], s[i], eps) == 1) {
+                up.pop_back();
+            } else {
+                break;
             }
         }
-        u.push_back(s[i]);
+        up.push_back(s[i]);
     }
 
-    l.push_back(s[n-1]);
-    l.push_back(s[n-2]);
+    down.push_back(s[n-1]);
+    down.push_back(s[n-2]);
     for (int i = n-3; i >= 0; i--) {
-        for (int j = (int)l.size()-1; j >= 1; j--) {
-            if (ccw(l[j-1], l[j], s[i], eps) == 1) {
-                l.pop_back();
+        for (int j = (int)down.size()-1; j >= 1; j--) {
+            if (ccw(down[j-1], down[j], s[i], eps) == 1) {
+                down.pop_back();
+            } else {
+                break;
             }
         }
-        l.push_back(s[i]);
+        down.push_back(s[i]);
     }
 
-    reverse(l.begin(), l.end());
-    for (int i = (int)u.size()-2; i >= 1; i--) {
-        l.push_back(u[i]);
+    reverse(down.begin(), down.end());
+    for (int i = (int)up.size()-2; i >= 1; i--) {
+        down.push_back(up[i]);
     }
 
-    return l;
+    return down;
 }
 
-#define CGL_4_A
+double convex_diameter(const Polygon& poly)
+{
+    int imin = 0, imax = 0;
+    int n = (int)poly.size();
+    double ymin = HUGE_VAL, ymax = -HUGE_VAL;
+    for (int i = 0; i < n; i++) {
+        if (poly[i].y < ymin) { 
+            ymin = poly[i].y;
+            imin = i;
+        }
+        if (poly[i].y > ymax) {
+            ymax = poly[i].y;
+            imax = i;
+        }
+    }
+    double dmax = ymax - ymin;
+    double d = dmax;
+    int is = imin, js = imax;
+    int i = is, j = js;
+    do {
+        if (cross(poly[(i+1)%n] - poly[i], poly[(j+1)%n] - poly[j]) < 0) {
+            i = (i+1)%n;
+        } else {
+            j = (j+1)%n;
+        }
+        d = (poly[i] - poly[j]).len();
+        if (d > dmax) {
+            dmax = d;
+            imin = i;
+            imax = j;
+        }
+    } while (i != is || j != js);
+
+    return dmax;
+}
+
+// true : divided
+// poly1 : left side of l.v, poly2:right side of l.v
+bool convex_cut(const Polygon& poly, const Line& l, double eps, Polygon& poly1, Polygon& poly2)
+{
+    AABB mmb(poly);
+    double diag = (mmb.max - mmb.min).len();
+    Point center = (mmb.min + mmb.max) * 0.5;
+
+    double c = 0;
+    Point pc = project(l, center, &c);
+    Point p1 = getpoint(l, c - diag);
+    Point p2 = getpoint(l, c + diag);
+    Segment line(p1, p2);
+
+    Polygon poly_div;
+    vector<int> intpos;
+    int n = (int)poly.size();
+    for (int i = 0; i < n; i++) {
+        double t, dist;
+        poly_div.push_back(poly[i]);
+        Point h = project(line, poly[i], &t, &dist);
+        if (dist < eps) {
+            intpos.push_back((int)poly_div.size()-1);
+        }
+        else {
+            Segment edge(poly[i], poly[(i+1)%n]);
+            Point x;
+            bool is_int = intersect(line, edge, eps, &x);
+            if (is_int && !x.equal(poly[(i+1)%n])) {
+                intpos.push_back((int)poly_div.size());
+                poly_div.push_back(x);
+            }
+        }
+    }
+    n = (int)poly_div.size();
+
+    if (intpos.size() < 2) {
+        if (ccw(p1, p2, center, eps) >= 0) {
+            poly1 = poly;
+        } else {
+            poly2 = poly;
+        }
+        return false;
+    }
+    int x0 = intpos[0];
+    int x1 = intpos[1];
+
+    poly1.clear();
+    for (int i = 0; i < x0; i++) {
+        poly1.push_back(poly_div[i]);
+    }
+    poly1.push_back(poly_div[x0]);
+    poly1.push_back(poly_div[x1]);
+    for (int i = x1+1; i < n; i++) {
+        poly1.push_back(poly_div[i]);
+    }
+
+    poly2.clear();
+    for (int i = x0; i <= x1; i++) {
+        poly2.push_back(poly_div[i]);
+    }
+
+    if ( dot(poly_div[x1] - poly_div[x0], l.v) < 0 ) {
+        poly2.swap(poly1);
+    }
+
+    return true;
+}
+
+#define CGL_4_C
 //------------------------------------------------------------------
 int main()
 {
+    const double eps = 1e-10;
+    cout << fixed << setprecision(10);
+
+    int n;
+    cin >> n;
+    Polygon poly;
+    for (int i = 0; i < n; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        poly.push_back(p);
+    }
+
+    int q;
+    cin >> q;
+    for (int i = 0 ; i < q; i++) {
+        double x1, y1, x2, y2;
+        cin >> x1 >> y1 >> x2 >> y2;
+        Point p1(x1, y1), p2(x2, y2);
+        Polygon poly1, poly2;
+        bool cut = convex_cut(poly, Line(p1, (p2-p1).norm()), eps, poly1, poly2);
+        // assert(cut);
+        cout << area(poly1) << endl;
+    }
+
+    return 0;
+}
+#ifdef CGL_4_B
+int main()
+{
+    const double eps = 1e-10;
+    
     int n;
     cin >> n;
 
-    cout << fixed << setprecision(0);
+    Polygon poly;
+    for (int i = 0; i < n; i++) {
+        double x, y;
+        cin >> x >> y;
+        Point p(x, y);
+        poly.push_back(p);
+    }
+
+    cout << fixed << setprecision(10);
+
+    cout << convex_diameter(poly) << endl;
+
+    return 0;
+}
+#endif
+
+#ifdef CGL_4_A
+int main()
+{
     const double eps = 1e-10;
+    
+    int n;
+    cin >> n;
 
     Polygon poly;
     for (int i = 0; i < n; i++) {
@@ -472,21 +675,16 @@ int main()
     Polygon hull = convex_hull(poly, eps);
 
     int m = (int)hull.size();
-    int idx = 0;
-    for (int i = 1; i < m; i++) {
-        if (compare_y(hull[i], hull[idx])) {
-            idx = i;
-        }
-    }
+
+    cout << fixed << setprecision(0);
 
     cout << m << endl;
     for (int i = 0; i < m; i++) {
-        cout << hull[(idx + i)%m].x << " " << hull[(idx + i)%m].y << endl;
+        cout << hull[i].x << " " << hull[i].y << endl;
     }
-
     return 0;
 }
-
+#endif
 #ifdef CGL_3_C
 int main()
 {
@@ -724,10 +922,10 @@ int main()
 
     Point p1(x1, y1);
     Point p2(x2, y2);
-    Line l(p1, (p2-p1).norm());
+    Line down(p1, (p2-p1).norm());
 
     double s = 0;
-    double t = param(l, p2);
+    double t = param(down, p2);
 
     int q;
     cin >> q;
@@ -740,7 +938,7 @@ int main()
         cin >> x >> y;
         Point p3(x, y);
         double m, dist;
-        Point h = project(l, p3, &m, &dist);
+        Point h = project(down, p3, &m, &dist);
         if (dist < eps) {
             if (m < s) {
                 cout << "ONLINE_BACK" << endl;
@@ -775,7 +973,7 @@ int main()
 
     Point p1(x1, y1);
     Point p2(x2, y2);
-    Line l(p1, (p2-p1).norm());
+    Line down(p1, (p2-p1).norm());
 
     int q;
     cin >> q;
@@ -786,7 +984,7 @@ int main()
         double x, y;
         cin >> x >> y;
         Point q(x, y);
-        Point h = symmetry(l, q);
+        Point h = symmetry(down, q);
 
         cout << h.x << " " << h.y << endl;
     }
@@ -805,7 +1003,7 @@ int main()
 
     Point p1(x1, y1);
     Point p2(x2, y2);
-    Line l(p1, (p2-p1).norm());
+    Line down(p1, (p2-p1).norm());
 
     int q;
     cin >> q;
@@ -816,7 +1014,7 @@ int main()
         double x, y;
         cin >> x >> y;
         Point q(x, y);
-        Point h = project(l, q);
+        Point h = project(down, q);
 
         cout << h.x << " " << h.y << endl;
     }
@@ -824,4 +1022,59 @@ int main()
     return 0;
 }
 
+#endif
+
+//------------------------------------------------------------------
+const long iSeed = 12345;
+mt19937 mt(iSeed);
+
+static bool st_GetSampleInteger2( const long numgrid[2], long numpnt, vector<vector<long>>& vviPos )
+{
+    assert( numpnt > 0 );
+    vector<vector<long>> vviPos0;
+    set<vector<long>> z;
+    for(long i=0; i<numpnt*5; i++) {
+        if((long)vviPos0.size()==numpnt) {
+            break;
+        }
+        vector<long> v;
+        for(long k=0; k<2; k++) {
+            assert( numgrid[k] > 0 );
+            long tmp = mt() % numgrid[k];
+            v.push_back(tmp);
+        }
+        if(z.insert(v).second) {
+            vviPos0.push_back( v ); 
+        }
+    }
+    if((long)vviPos0.size() != numpnt) {
+        return false;
+    }
+    vviPos.swap( vviPos0 );
+    return true;
+}
+
+#ifdef TEST_GENERATOR
+int main()
+{
+    long numgrid[2] = {20000, 2000};
+    long numpnt = 10000;
+
+    vector<vector<long>> vviPos;
+    if (!st_GetSampleInteger2(numgrid, numpnt, vviPos)) {
+        return 1;
+    }
+
+    ofstream out("E:\\Develop2\\AoJ\\Courses\\convex_hull.txt");
+    if (!out) {
+        return 2;
+    }
+
+    out << numpnt << endl;
+    for (int i = 0; i < numpnt; i++) {
+        out << vviPos[i][0] - 10000 << " " << vviPos[i][1] - 10000 << endl;
+    }
+
+    return 0;
+}
 #endif
