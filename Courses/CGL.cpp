@@ -601,8 +601,57 @@ bool convex_cut(const Polygon& poly, const Line& l, double eps, Polygon& poly1, 
     return true;
 }
 
-#define CGL_4_C
+double closest_pair(vector<Point>::iterator p, int n)
+{
+    if (n <= 1) return HUGE_VAL;
+    int m = n / 2;
+    double xm = (p + m)->x;
+    double d = min(closest_pair(p, m), closest_pair(p+m, n-m));
+
+    sort(p, p+n, compare_y);
+    vector<Point> q;
+    for (int i = 0; i < n; i++) {
+        if (fabs((p+i)->x - xm) >= d) continue;
+
+        for (int j = (int)q.size()-1; j >= 0; j--) {
+            Vector qp = *(p + i) - q[j];
+            if (qp.y >= d) break;
+            d = min(d, qp.len());
+        }
+        q.push_back(*(p+i));
+    }
+
+    return d;
+}
+
+double closest_pair(vector<Point>& P)
+{
+    sort(P.begin(), P.end(), compare_x);
+    return closest_pair(P.begin(), (int)P.size());
+}
+
+#define CGL_5_A
 //------------------------------------------------------------------
+int main()
+{
+    const double eps = 1e-10;
+    cout << fixed << setprecision(10);
+
+    int n;
+    cin >> n;
+    vector<Point> P(n);
+    for (int i = 0; i < n; i++) {
+        double x, y;
+        cin >> x >> y;
+        P[i] = Point(x, y);
+    }
+
+    cout << closest_pair(P) << endl;
+
+    return 0;
+}
+
+#ifdef CGL_4_C
 int main()
 {
     const double eps = 1e-10;
@@ -632,6 +681,7 @@ int main()
 
     return 0;
 }
+#endif
 #ifdef CGL_4_B
 int main()
 {
