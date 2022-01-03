@@ -119,6 +119,13 @@ double cross(const Vector& p, const Vector& q) {
     return p.x * q.y - p.y * q.x;
 } 
 
+Vector rotate(const Vector& v, double theta)
+{
+    double s = sin(theta);
+    double c = cos(theta);
+    return { v.x * c + v.y * s, -v.x * s + v.y * c };
+}
+
 struct Line 
 {
     Line() = default;
@@ -731,13 +738,15 @@ Line bisect(const Point& a, const Point& b, const Point& c)
 
 double angle(const Point& a, const Point& b, const Point& c)
 {
-    return acos(dot(b - a, c - a));
+    Vector ab = (b - a).norm();
+    Vector ac = (c - a).norm();
+    return acos(dot(ab, ac));
 }
 
 Circle incircle(const Point& a, const Point& b, const Point& c, double eps)
 {
     vector<double> angles { angle(a, b, c), angle(b, c, a), angle(c, a, b) };
-    int min = distance(angles.begin(), min_element(angles.begin(), angles.end()));
+    int min = (int)distance(angles.begin(), min_element(angles.begin(), angles.end()));
 
     Line L1, L2;
     if (min == 0) {
@@ -762,8 +771,173 @@ Circle incircle(const Point& a, const Point& b, const Point& c, double eps)
     return Circle(o, r);
 }
 
-#define CGL_7_B
+Line perpendicular_bisector(const Point& a, const Point& b)
+{
+    Vector p = {(b - a).y, -(b - a).x};
+    return Line((a + b) * 0.5, p.norm());
+}
+
+Circle circumscribed_circle(const Point& a, const Point& b, const Point& c, double eps)
+{
+    vector<double> angles { angle(a, b, c), angle(b, c, a), angle(c, a, b) };
+    int max = (int)distance(angles.begin(), max_element(angles.begin(), angles.end()));
+
+    Line L1, L2;
+    if (max == 0) {
+        L1 = perpendicular_bisector(a, b);
+        L2 = perpendicular_bisector(a, c);
+    } else if (max == 1) {
+        L1 = perpendicular_bisector(a, b);
+        L2 = perpendicular_bisector(b, c);
+    } else {
+        L1 = perpendicular_bisector(a, c);
+        L2 = perpendicular_bisector(b, c);
+    }
+
+    Point o;
+    if (!intersect(L1, L2, eps, 0, 0, &o)) {
+        cerr << "no intersection!" << endl;
+    }
+    double r = (o - a).len();
+
+    return Circle(o, r);
+}
+
+vector<Point> intersect(const Circle& C, const Line& l, double eps)
+{
+    vector<Point> xs;
+    double t = 0, d = 0;
+    Point h = project(l, C.c, &t, &d);
+    if (fabs(C.r - d) < eps) {
+        xs.push_back(h);
+        return xs;
+    }
+    double s = sqrt(C.r * C.r - d * d);
+    Point x1 = getpoint(l, t - s);
+    Point x2 = getpoint(l, t + s);
+    xs.push_back(x1);
+    xs.push_back(x2);
+    return xs;
+}
+
+vector<Point> intersect(const Circle& C1, const Circle& C2, double eps)
+{
+    vector<Point> xs;
+
+    Vector r = C2.c - C1.c;
+    double d = r.len();
+
+    if (d - (C1.r + C2.r) > eps) {
+        return xs;
+    }
+    else if (d - (C1.r + C2.r) > -eps) {
+        Point x = C1.c + r * (C1.r / d);
+        xs.push_back(x);
+        return xs;
+    }
+
+    double cost = (C1.r * C1.r + d * d - C2.r * C2.r) / (2 * C1.r * d);
+    double theta = acos(cost);
+    Vector cx1 = rotate(r, theta) * (C1.r / d);
+    Vector cx2 = rotate(r, -theta) * (C1.r / d);
+    Point x1 = C1.c + cx1;
+    Point x2 = C1.c + cx2;
+    xs.push_back(x1);
+    xs.push_back(x2);
+    return xs;
+}
+
+#define CGL_7_E
 //------------------------------------------------------------------
+int main()
+{
+    const double eps = 1e-8;
+    cout << fixed << setprecision(8);
+
+    Circle C[2];
+    for (int i = 0; i < 2; i++) {
+        double x, y, r;
+        cin >> x >> y >> r;
+        C[i] = Circle(Point(x, y), r);
+    }
+
+    auto Points = intersect(C[0], C[1], eps);
+    int m = (int)Points.size();
+    if (m < 0 || m > 2) {
+        cerr << "invalid intersecting points! " << m << endl;
+        return 1;
+    }
+
+    sort(Points.begin(), Points.end(), compare_x);
+    if (m == 1) {
+        Points.push_back(Points[0]);
+    }
+        
+    cout << Points[0].x << " " << Points[0].y << " "
+            << Points[1].x << " " << Points[1].y << endl;
+
+    return 0;
+}
+
+#ifdef CGL_7_D
+int main()
+{
+    const double eps = 1e-8;
+    cout << fixed << setprecision(8);
+
+    double x, y, r;
+    cin >> x >> y >> r;
+    Circle C(Point(x, y), r);
+
+    int q;
+    cin >> q;
+    for (int i = 0; i < q; i++) {
+        double x1, y1, x2, y2;
+        cin >> x1 >> y1 >> x2 >> y2;
+        Point p(x1, y1), q(x2, y2);
+        Line l(p, (q - p).norm());
+
+        auto Points = intersect(C, l, eps);
+        int m = (int)Points.size();
+        if (m < 0 || m > 2) {
+            cerr << "invalid intersecting points! " << m << endl;
+            return 1;
+        }
+
+        sort(Points.begin(), Points.end(), compare_x);
+        if (m == 1) {
+            Points.push_back(Points[0]);
+        }
+        
+        cout << Points[0].x << " " << Points[0].y << " "
+             << Points[1].x << " " << Points[1].y << endl;
+    }
+
+    return 0;
+}
+#endif
+
+#ifdef CGL_7_C
+int main()
+{
+    const double eps = 1e-8;
+    cout << fixed << setprecision(8);
+
+    Point Tri[3];
+    for (int i = 0; i < 3; i++) {
+        double x, y;
+        cin >> x >> y;
+        Tri[i] = Point(x, y);
+    }
+
+    Circle C = circumscribed_circle(Tri[0], Tri[1], Tri[2], eps);
+
+    cout << C.c.x << " " << C.c.y << " " << C.r << endl;
+
+    return 0;
+}
+#endif
+#ifdef CGL_7_B
 int main()
 {
     const double eps = 1e-8;
@@ -782,6 +956,7 @@ int main()
 
     return 0;
 }
+#endif
 
 #ifdef CGL_7_A
 int main()
