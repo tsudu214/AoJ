@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -847,8 +848,152 @@ vector<Point> intersect(const Circle& C1, const Circle& C2, double eps)
     return xs;
 }
 
-#define CGL_7_E
+vector<Point> tangent_line(const Circle& C, const Point& p, double eps)
+{
+    vector<Point> xs;
+
+    Vector pc = C.c - p;
+    double d = pc.len();
+    if (d < C.r + eps) {
+        return xs;
+    }
+    double sint = C.r/d;
+    double theta = asin(sint);
+    double k = sqrt(1 - sint*sint);
+    Vector px1 = rotate(pc, theta) * k;
+    Vector px2 = rotate(pc, -theta) * k;
+    Point x1 = p + px1;
+    Point x2 = p + px2;
+    xs.push_back(x1);
+    xs.push_back(x2);
+
+    return xs;
+}
+
+vector<Point> common_tangent(const Circle& Ca, const Circle& Cb, double eps)
+{
+    vector<Point> xs;
+
+    bool output_smaller = true;
+    Circle C1, C2; // C1.r <= C2.r
+    if (Ca.r <= Cb.r) {
+        C1 = Ca; C2 = Cb;
+    } else {
+        C1 = Cb; C2 = Ca;
+        output_smaller = false;
+    }
+    Vector D12 = C2.c - C1.c;
+    double d = D12.len();
+    double r = C1.r, R = C2.r;
+
+    // 0: included, 1: inscribed, 2: intersecting, 3: circumscribed, 4: separated
+    int m = intersect_cc_type(C1, C2, eps);
+    if (m == 0) 
+    {
+        // do nothing
+    }
+    if (m == 1) 
+    {
+        Point x = C1.c - D12 * (r/d);
+        xs.push_back(x);
+    }
+    if (m == 3) 
+    {
+        Point x = C1.c + D12 * (r/d);
+        xs.push_back(x);
+    }
+    if (m >= 2)
+    {
+        double cost = (R - r)/d;
+        double theta = acos(cost);
+        Vector cx1 = rotate(D12, theta + M_PI);
+        Vector cx2 = rotate(D12, -theta - M_PI);
+        Point x1, x2;
+        if (output_smaller) {
+            x1 = C1.c + cx1 * (r/d);
+            x2 = C1.c + cx2 * (r/d);
+        } else {
+            x1 = C2.c + cx1 * (R/d);
+            x2 = C2.c + cx2 * (R/d);
+        }
+        xs.push_back(x1);
+        xs.push_back(x2);
+    }
+    if (m == 4)
+    {
+        double cost = (R + r)/d;
+        double theta = acos(cost);
+        Vector cx1 = rotate(D12, theta);
+        Vector cx2 = rotate(D12, -theta);
+        Point x1, x2;
+        if (output_smaller) {
+            x1 = C1.c + cx1 * (r/d);
+            x2 = C1.c + cx2 * (r/d);
+        } else {
+            x1 = C2.c - cx1 * (R/d);
+            x2 = C2.c - cx2 * (R/d);
+        }
+        xs.push_back(x1);
+        xs.push_back(x2);
+    }
+
+    return xs;
+}
+
+#define CGL_7_G
 //------------------------------------------------------------------
+int main()
+{
+    const double eps = 1e-8;
+    cout << fixed << setprecision(8);
+
+    Circle C[2];
+    for (int i = 0; i < 2; i++) {
+        double x, y, r;
+        cin >> x >> y >> r;
+        C[i] = Circle(Point(x, y), r);
+    }
+
+    auto Points = common_tangent(C[0], C[1], eps);
+    int m = (int)Points.size();
+
+    sort(Points.begin(), Points.end(), compare_x);
+    
+    for (int i = 0; i < m; i++) {
+        cout << Points[i].x << " " << Points[i].y << endl;
+    }
+
+    return 0;
+}
+#ifdef CGL_7_F
+int main()
+{
+    const double eps = 1e-8;
+    cout << fixed << setprecision(8);
+
+    double x, y, r;
+    cin >> x >> y;
+    Point p(x, y);
+
+    cin >> x >> y >> r;
+    Circle C(Point(x, y), r);
+
+    auto Points = tangent_line(C, p, eps);
+    int m = (int)Points.size();
+    if (m != 2) {
+        cerr << "invalid intersecting points! " << m << endl;
+        return 1;
+    }
+
+    sort(Points.begin(), Points.end(), compare_x);
+        
+    cout << Points[0].x << " " << Points[0].y << endl;
+    cout << Points[1].x << " " << Points[1].y << endl;
+
+    return 0;
+}
+#endif
+#ifdef CGL_7_E
 int main()
 {
     const double eps = 1e-8;
@@ -878,7 +1023,7 @@ int main()
 
     return 0;
 }
-
+#endif
 #ifdef CGL_7_D
 int main()
 {
