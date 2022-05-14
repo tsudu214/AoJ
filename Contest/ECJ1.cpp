@@ -22,6 +22,111 @@ using namespace std;
 using ll = long long; // 9,223,372,036,854,775,807 = 9*10^18
 
 
+int main()
+{
+
+    return 0;
+}
+
+#ifdef Problem8
+
+struct Point {
+    Point() = default;
+    Point(ll x, ll y) : x(x), y(y) {}
+    ll x, y;
+};
+
+struct Aabb {
+    Aabb() = default;
+    Aabb(Point m, Point M) : m(m), M(M) {}
+    Point m;
+    Point M;
+};
+
+int main()
+{
+    int n;
+    cin >> n;
+
+    vector<ll> x, y;
+    x.reserve(2*n);
+    y.reserve(2*n);
+
+    vector<Aabb>  vRect(n);
+    for (int i = 0; i < n; i++) {
+        ll x1, x2, y1, y2;
+        cin >> x1 >> y1 >> x2 >> y2;
+        vRect[i] = Aabb(Point(x1, y1), Point(x2, y2));
+        x.push_back(x1);
+        x.push_back(x2);
+        y.push_back(y1);
+        y.push_back(y2);
+    }
+
+    sort(x.begin(), x.end());
+    x.erase(unique(x.begin(), x.end()), x.end());
+    sort(y.begin(), y.end());
+    y.erase(unique(y.begin(), y.end()), y.end());
+
+    for (auto & r : vRect) {
+        r.m.x = lower_bound(x.begin(), x.end(), r.m.x) - x.begin();
+        r.m.y = lower_bound(y.begin(), y.end(), r.m.y) - y.begin();
+        r.M.x = lower_bound(x.begin(), x.end(), r.M.x) - x.begin();
+        r.M.y = lower_bound(y.begin(), y.end(), r.M.y) - y.begin();
+    }
+
+    int xn = (int)x.size();
+    int yn = (int)y.size();
+    vector<vector<pair<ll, int>>> xevent(yn-1);  // { x, 0(start) or 1(end)}
+
+    for (auto & r : vRect) {
+        for (ll iy = r.m.y; iy < r.M.y; iy++) {
+            xevent[iy].push_back(make_pair(r.m.x, 0));
+            xevent[iy].push_back(make_pair(r.M.x, 1));
+        }
+    }
+
+    vector<vector<pair<ll, ll>>> xrange(yn-1);  // {start, end}
+    for (int i = 0; i < yn-1; i++) {
+        auto & event = xevent[i];
+        sort(event.begin(), event.end());
+        int mult = 0;
+        for (int j = 0; j < event.size(); j++) {
+            if (event[j].second == 0) {
+                mult++;
+                if (mult == 1) {
+                    xrange[i].push_back(make_pair(event[j].first, -1));
+                }
+            }
+            else {
+                mult--;
+                if (mult == 0) {
+                    xrange[i].back().second = event[j].first;
+                }
+            }
+        }
+    }
+
+    ll area = 0;
+    for (int i = 0; i < yn-1; i++) {
+        ll height = y[i+1] - y[i];
+        for ( auto& range : xrange[i] ) {
+            ll start = x[range.first];
+            ll end   = x[range.second];
+            ll width = end - start;
+            area += width * height;
+        }
+    }
+
+    cout << area << endl;
+
+    return 0;
+}
+
+#endif
+
+#ifdef Problem2
+
 struct Point {
     double x;
     double y;
@@ -106,6 +211,8 @@ int main()
 
     return 0;
 }
+
+#endif
 
 #ifdef Problem7
 
